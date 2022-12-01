@@ -1,0 +1,49 @@
+#!fsharp
+
+open System
+open System.IO
+
+let input = File.ReadAllLines("input.txt")
+
+#!fsharp
+
+type Food = { calories: int }
+module Food =
+    let (+) f1 f2 = { calories = f1.calories + f2.calories }
+    let create c = { calories = c }
+    let calories f = f.calories
+
+type Elf = { food: Food list }
+module Elf =
+    let empty = { food = [] }
+    let food e = e.food
+    let totalFood = food >> (List.reduce Food.(+))
+
+#!fsharp
+
+let elfs =
+    input
+    |> Seq.map (
+        function
+        | "" -> None
+        | num -> int num |> Food.create |> Some)
+    |> Seq.fold (fun elfs foodOption ->
+        match foodOption with
+        | None -> (Elf.empty) :: elfs
+        | Some f -> 
+            let currentElf = List.head elfs
+            let otherElfs = List.tail elfs
+            { currentElf with food = (f :: currentElf.food)} :: otherElfs)
+        [ Elf.empty ]
+
+let mostCalories =
+    elfs
+    |> Seq.map Elf.totalFood
+    |> Seq.maxBy Food.calories
+
+let foodCarriedByTop3 =
+    elfs
+    |> Seq.map Elf.totalFood
+    |> Seq.sortByDescending Food.calories
+    |> Seq.take 3
+    |> Seq.sumBy Food.calories
