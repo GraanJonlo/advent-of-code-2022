@@ -3,7 +3,10 @@
 open System
 open System.IO
 
-let input = File.ReadAllLines("input.txt")
+let day01input = File.ReadAllLines("day01input.txt")
+let day02input = File.ReadAllLines("day02input.txt")
+
+let flip fn x y = fn y x
 
 #!fsharp
 
@@ -19,10 +22,68 @@ module Elf =
     let food e = e.food
     let totalFood = food >> (List.reduce Food.(+))
 
+type PlayerMove =
+    | Rock
+    | Paper
+    | Scissors
+module PlayerMove =
+    let parse =
+        function
+        | "A" | "X" -> Rock
+        | "B" | "Y" -> Paper
+        | "C" | "Z" -> Scissors
+        | _ -> raise <| Exception("Unrecognised move")
+
+    let score =
+        function
+        | Rock -> 1
+        | Paper -> 2
+        | Scissors -> 3
+
+type RoundResult =
+    | Lose
+    | Win
+    | Draw
+module RoundResult =
+    let parse =
+        function
+        | "X" -> Lose
+        | "Y" -> Draw
+        | "Z" -> Win
+        | _ -> raise <| Exception("Unrecognised move")
+
+    let score =
+        function
+        | Lose -> 0
+        | Win -> 6
+        | Draw -> 3
+
+type Round = PlayerMove * PlayerMove
+module Round =
+    let outcome =
+        function
+        | (p1m, p2m) when p1m = p2m -> Draw
+        | (Rock, playerMove) when playerMove <> Paper -> Lose
+        | (Paper, playerMove) when playerMove <> Scissors -> Lose
+        | (Scissors, playerMove) when playerMove <> Rock -> Lose
+        | _ -> Win
+
+type RoundStrategy = PlayerMove * RoundResult
+module RoundStrategy =
+    let response =
+        function
+        | (Rock, Win) -> Paper
+        | (Rock, Lose) -> Scissors
+        | (Paper, Win) -> Scissors
+        | (Paper, Lose) -> Rock
+        | (Scissors, Win) -> Rock
+        | (Scissors, Lose) -> Paper
+        | (m, Draw) -> m
+
 #!fsharp
 
 let elfs =
-    input
+    day01input
     |> Seq.map (
         function
         | "" -> None
@@ -47,3 +108,29 @@ let foodCarriedByTop3 =
     |> Seq.sortByDescending Food.calories
     |> Seq.take 3
     |> Seq.sumBy Food.calories
+
+let rounds =
+    day02input
+    |> Seq.map (fun x -> PlayerMove.parse (x.Substring(0,1)), PlayerMove.parse (x.Substring(2,1)))
+    |> Seq.map (fun (p1m, p2m) -> p1m, p2m, Round.outcome (p1m, p2m))
+
+let score =
+    rounds
+    |> Seq.map (fun (p1m, p2m, outcome) ->
+        PlayerMove.score p2m + RoundResult.score outcome)
+    |> Seq.sum
+
+let roundStrategys =
+    day02input
+    |> Seq.map (fun x -> PlayerMove.parse (x.Substring(0,1)), RoundResult.parse (x.Substring(2,1)))
+
+let moves =
+    roundStrategys
+    |> Seq.map RoundStrategy.response
+
+let score2 =
+    roundStrategys
+    |> Seq.map snd
+    |> Seq.zip moves
+    |> Seq.map (fun (move, outcome) -> PlayerMove.score move + RoundResult.score outcome)
+    |> Seq.sum
