@@ -5,8 +5,12 @@ open System.IO
 
 let day01input = File.ReadAllLines("day01input.txt")
 let day02input = File.ReadAllLines("day02input.txt")
+let day03input = File.ReadAllLines("day03input.txt")
 
 let flip fn x y = fn y x
+
+module String =
+    let toCharArray (x: string) = x.ToCharArray()
 
 #!fsharp
 
@@ -15,12 +19,6 @@ module Food =
     let (+) f1 f2 = { calories = f1.calories + f2.calories }
     let create c = { calories = c }
     let calories f = f.calories
-
-type Elf = { food: Food list }
-module Elf =
-    let empty = { food = [] }
-    let food e = e.food
-    let totalFood = food >> (List.reduce Food.(+))
 
 type PlayerMove =
     | Rock
@@ -80,6 +78,80 @@ module RoundStrategy =
         | (Scissors, Lose) -> Paper
         | (m, Draw) -> m
 
+type Item = Item of char
+module Item =
+    let priority (Item x) =
+        if (Char.IsLower(x)) then
+            (int x) - (int 'a') + 1
+        else
+            (int x) - (int 'A') + 27
+
+type Items = Item[]
+module Items =
+    let empty = Array.empty
+    let parse = Array.map Item
+    
+    let itemsInAll (is: Items seq) =
+        is
+        |> Seq.map Set.ofArray
+        |> Set.intersectMany
+
+type Rucksack =
+    {
+        compartments: Items * Items
+    }
+
+module Rucksack =
+    let empty = { compartments = Compartment.empty, Compartment.empty }
+    let parse (x: string) =
+        String.toCharArray x
+        |> Items.parse
+        |> Array.splitInto 2
+        |> (fun y -> {compartments = y[0], y[1]})
+
+    let itemInBothCompartments ({ compartments = c1, c2 }) =
+        let matches = Items.itemsInAll [c1; c2]
+
+        if matches <> Set.empty then
+            matches |> Set.toList |> List.head |> Some
+        else
+            None
+
+    let priority c =
+        itemInBothCompartments c
+        |> function
+            | Some i -> Item.priority i
+            | None -> 0
+
+    let items ({ compartments = c1, c2 }) =
+        Array.concat [c1; c2]
+
+type Elf =
+    { food: Food list
+      rucksack: Rucksack }
+
+module Elf =
+    let empty = { food = []; rucksack = Rucksack.empty }
+    let food e = e.food
+    let totalFood = food >> (List.reduce Food.(+))
+
+type ElfGroup =
+    { elfs: Elf * Elf * Elf }
+
+module ElfGroup =
+    let create elfs =
+        match elfs with
+        | [| x; y; z|] -> {elfs = x, y, z}
+        | _ -> raise <| Exception("Elfs not divisible into groups of 3")
+
+    let badge { elfs = e1, e2, e3 } =
+        [| e1; e2; e3 |]
+        |> Seq.map (fun e -> e.rucksack)
+        |> Seq.map Rucksack.items
+        |> Items.itemsInAll
+        |> Set.toList
+        |> List.head
+
 #!fsharp
 
 let elfs =
@@ -133,4 +205,20 @@ let score2 =
     |> Seq.map snd
     |> Seq.zip moves
     |> Seq.map (fun (move, outcome) -> PlayerMove.score move + RoundResult.score outcome)
+    |> Seq.sum
+
+let rucksacks =
+    day03input
+    |> Seq.map Rucksack.parse
+
+let groupedElfs =
+    rucksacks
+    |> Seq.map (fun r -> { food = []; rucksack = r})
+    |> Seq.chunkBySize 3
+    |> Seq.map ElfGroup.create
+
+let priorityTotal =
+    groupedElfs
+    |> Seq.map ElfGroup.badge
+    |> Seq.map Item.priority
     |> Seq.sum
