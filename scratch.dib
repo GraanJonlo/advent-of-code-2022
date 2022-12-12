@@ -3,10 +3,6 @@
 open System
 open System.IO
 
-let day01input = File.ReadAllLines("day01input.txt")
-let day02input = File.ReadAllLines("day02input.txt")
-let day03input = File.ReadAllLines("day03input.txt")
-
 let flip fn x y = fn y x
 
 module String =
@@ -14,11 +10,101 @@ module String =
 
 #!fsharp
 
+let day01input = File.ReadAllLines("day01input.txt")
+
 type Food = { calories: int }
 module Food =
     let (+) f1 f2 = { calories = f1.calories + f2.calories }
     let create c = { calories = c }
     let calories f = f.calories
+
+type Item = Item of char
+module Item =
+    let priority (Item x) =
+        if (Char.IsLower(x)) then
+            (int x) - (int 'a') + 1
+        else
+            (int x) - (int 'A') + 27
+
+type Items = Item[]
+module Items =
+    let empty = Array.empty
+    let parse = Array.map Item
+    
+    let itemsInAll (is: Items seq) =
+        is
+        |> Seq.map Set.ofArray
+        |> Set.intersectMany
+
+type Rucksack =
+    {
+        compartments: Items * Items
+    }
+
+module Rucksack =
+    let empty = { compartments = Items.empty, Items.empty }
+    let parse (x: string) =
+        String.toCharArray x
+        |> Items.parse
+        |> Array.splitInto 2
+        |> (fun y -> {compartments = y[0], y[1]})
+
+    let itemInBothCompartments ({ compartments = c1, c2 }) =
+        let matches = Items.itemsInAll [c1; c2]
+
+        if matches <> Set.empty then
+            matches |> Set.toList |> List.head |> Some
+        else
+            None
+
+    let priority c =
+        itemInBothCompartments c
+        |> function
+            | Some i -> Item.priority i
+            | None -> 0
+
+    let items ({ compartments = c1, c2 }) =
+        Array.concat [c1; c2]
+
+type Elf =
+    { food: Food list
+      rucksack: Rucksack }
+
+module Elf =
+    let empty = { food = []; rucksack = Rucksack.empty }
+    let food e = e.food
+    let totalFood = food >> (List.reduce Food.(+))
+
+let elfs =
+    day01input
+    |> Seq.map (
+        function
+        | "" -> None
+        | num -> int num |> Food.create |> Some)
+    |> Seq.fold (fun elfs foodOption ->
+        match foodOption with
+        | None -> (Elf.empty) :: elfs
+        | Some f -> 
+            let currentElf = List.head elfs
+            let otherElfs = List.tail elfs
+            { currentElf with food = (f :: currentElf.food)} :: otherElfs)
+        [ Elf.empty ]
+
+let mostCalories =
+    elfs
+    |> Seq.map Elf.totalFood
+    |> Seq.maxBy Food.calories
+
+let foodCarriedByTop3 =
+    elfs
+    |> Seq.map Elf.totalFood
+    |> Seq.sortByDescending Food.calories
+    |> Seq.take 3
+    |> Seq.sumBy Food.calories
+
+#!fsharp
+
+let day02input = File.ReadAllLines("day02input.txt")
 
 type PlayerMove =
     | Rock
@@ -78,109 +164,6 @@ module RoundStrategy =
         | (Scissors, Lose) -> Paper
         | (m, Draw) -> m
 
-type Item = Item of char
-module Item =
-    let priority (Item x) =
-        if (Char.IsLower(x)) then
-            (int x) - (int 'a') + 1
-        else
-            (int x) - (int 'A') + 27
-
-type Items = Item[]
-module Items =
-    let empty = Array.empty
-    let parse = Array.map Item
-    
-    let itemsInAll (is: Items seq) =
-        is
-        |> Seq.map Set.ofArray
-        |> Set.intersectMany
-
-type Rucksack =
-    {
-        compartments: Items * Items
-    }
-
-module Rucksack =
-    let empty = { compartments = Compartment.empty, Compartment.empty }
-    let parse (x: string) =
-        String.toCharArray x
-        |> Items.parse
-        |> Array.splitInto 2
-        |> (fun y -> {compartments = y[0], y[1]})
-
-    let itemInBothCompartments ({ compartments = c1, c2 }) =
-        let matches = Items.itemsInAll [c1; c2]
-
-        if matches <> Set.empty then
-            matches |> Set.toList |> List.head |> Some
-        else
-            None
-
-    let priority c =
-        itemInBothCompartments c
-        |> function
-            | Some i -> Item.priority i
-            | None -> 0
-
-    let items ({ compartments = c1, c2 }) =
-        Array.concat [c1; c2]
-
-type Elf =
-    { food: Food list
-      rucksack: Rucksack }
-
-module Elf =
-    let empty = { food = []; rucksack = Rucksack.empty }
-    let food e = e.food
-    let totalFood = food >> (List.reduce Food.(+))
-
-type ElfGroup =
-    { elfs: Elf * Elf * Elf }
-
-module ElfGroup =
-    let create elfs =
-        match elfs with
-        | [| x; y; z|] -> {elfs = x, y, z}
-        | _ -> raise <| Exception("Elfs not divisible into groups of 3")
-
-    let badge { elfs = e1, e2, e3 } =
-        [| e1; e2; e3 |]
-        |> Seq.map (fun e -> e.rucksack)
-        |> Seq.map Rucksack.items
-        |> Items.itemsInAll
-        |> Set.toList
-        |> List.head
-
-#!fsharp
-
-let elfs =
-    day01input
-    |> Seq.map (
-        function
-        | "" -> None
-        | num -> int num |> Food.create |> Some)
-    |> Seq.fold (fun elfs foodOption ->
-        match foodOption with
-        | None -> (Elf.empty) :: elfs
-        | Some f -> 
-            let currentElf = List.head elfs
-            let otherElfs = List.tail elfs
-            { currentElf with food = (f :: currentElf.food)} :: otherElfs)
-        [ Elf.empty ]
-
-let mostCalories =
-    elfs
-    |> Seq.map Elf.totalFood
-    |> Seq.maxBy Food.calories
-
-let foodCarriedByTop3 =
-    elfs
-    |> Seq.map Elf.totalFood
-    |> Seq.sortByDescending Food.calories
-    |> Seq.take 3
-    |> Seq.sumBy Food.calories
-
 let rounds =
     day02input
     |> Seq.map (fun x -> PlayerMove.parse (x.Substring(0,1)), PlayerMove.parse (x.Substring(2,1)))
@@ -207,6 +190,27 @@ let score2 =
     |> Seq.map (fun (move, outcome) -> PlayerMove.score move + RoundResult.score outcome)
     |> Seq.sum
 
+#!fsharp
+
+let day03input = File.ReadAllLines("day03input.txt")
+
+type ElfGroup =
+    { elfs: Elf * Elf * Elf }
+
+module ElfGroup =
+    let create elfs =
+        match elfs with
+        | [| x; y; z|] -> {elfs = x, y, z}
+        | _ -> raise <| Exception("Elfs not divisible into groups of 3")
+
+    let badge { elfs = e1, e2, e3 } =
+        [| e1; e2; e3 |]
+        |> Seq.map (fun e -> e.rucksack)
+        |> Seq.map Rucksack.items
+        |> Items.itemsInAll
+        |> Set.toList
+        |> List.head
+
 let rucksacks =
     day03input
     |> Seq.map Rucksack.parse
@@ -222,3 +226,46 @@ let priorityTotal =
     |> Seq.map ElfGroup.badge
     |> Seq.map Item.priority
     |> Seq.sum
+
+#!fsharp
+
+let day04input = File.ReadAllLines("day04input.txt")
+
+type SectionIds =
+    { first: int
+      last: int }
+
+module SectionIds =
+    let parse (x:string) =
+        x.Split([|',';'-'|])
+        |> function
+            | [|f1;l1;f2;l2|] -> {first = int f1; last = int l1}, {first = int f2; last = int l2}
+            | _ -> raise <| Exception("Unexpected format")
+
+    let xInY x y =
+        x.first >= y.first && x.last <= y.last
+
+    let eitherContainsOther x y =
+        xInY x y || xInY y x
+
+    let overlap x y =
+        [x; y]
+        |> List.sortBy (fun z -> z.first)
+        |> function
+            | [x;y] -> x.first <= y.first && x.last >= y.first
+            | _ -> raise <| Exception("Unreachable")
+
+
+let sectionIds =
+    day04input
+    |> Seq.map SectionIds.parse
+
+let countOfRangesTotallyInsideAnother =
+    sectionIds
+    |> Seq.filter ( fun (x,y) -> SectionIds.eitherContainsOther x y )
+    |> Seq.length
+
+let overlaps =
+    sectionIds
+    |> Seq.filter ( fun (x, y) -> SectionIds.overlap x y )
+    |> Seq.length
