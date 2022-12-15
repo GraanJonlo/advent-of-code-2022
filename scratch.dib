@@ -1,3 +1,7 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":null,"items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"html","languageName":"HTML"},{"name":"sql","languageName":"SQL"},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"httpRequest","languageName":"http"},{"name":"value"}]}}
+
 #!fsharp
 
 open System
@@ -269,3 +273,87 @@ let overlaps =
     sectionIds
     |> Seq.filter ( fun (x, y) -> SectionIds.overlap x y )
     |> Seq.length
+
+#!fsharp
+
+let day05input = File.ReadAllLines("day05input.txt")
+
+let rowCount =
+    day05input
+    |> Seq.findIndex (fun x -> x = "")
+    |> flip (-) 1
+
+let columnCount =
+    day05input[rowCount].Split([|' '|])
+    |> Seq.filter (fun x -> x <> "")
+    |> Seq.last
+    |> int
+
+let rawCrates =
+    day05input
+    |> Array.take rowCount
+
+type Crate = Crate of string
+
+type Move = { from: int; to': int }
+type Move9001 = { count: int; from: int; to': int}
+
+type Instruction =
+    | Move of Move
+    | MoveAdv of Move9001
+
+let stacks =
+    [0..(columnCount-1)]
+    |> Seq.map (fun x ->
+        [0..(rowCount-1)]
+        |> Seq.map (fun y ->
+            let currentRow = rawCrates[y]
+            currentRow.Substring(((x*4)+1), 1))
+        |> Seq.filter (fun y -> y <> " ")
+        |> Seq.map (fun y -> Crate y)
+        |> List.ofSeq)
+    |> List.ofSeq
+
+module Stacks =
+    let perform i (stacks: Crate list list) =
+        match i with
+        | Move { from = f; to' = t } ->
+            let newF = stacks[f-1] |> List.tail
+            let working = stacks[f-1] |> List.head
+            let newT = working :: stacks[t-1]
+            stacks
+            |> List.updateAt (f-1) newF
+            |> List.updateAt (t-1) newT
+        | MoveAdv { count = c; from = f; to' = t } ->
+            let newF = stacks[f-1] |> List.skip c
+            let working = stacks[f-1] |> List.take c
+            let newT = List.concat [working; stacks[t-1]]
+            stacks
+            |> List.updateAt (f-1) newF
+            |> List.updateAt (t-1) newT
+
+(* let instructions =
+    day05input
+    |> Seq.skip (rowCount+2)
+    |> Seq.collect (fun x ->
+        x.Split(' ')
+        |> fun y ->
+            [1..(int y[1])]
+            |> Seq.map (fun _ -> Move { from = int y[3]; to' = int y[5] }))
+    |> List.ofSeq *)
+
+let instructions =
+    day05input
+    |> Seq.skip (rowCount+2)
+    |> Seq.map (fun x ->
+        x.Split(' ')
+        |> fun y ->
+            MoveAdv { count = int y[1]; from = int y[3]; to' = int y[5] })
+    |> List.ofSeq
+
+let topCrates = 
+    Seq.fold (flip Stacks.perform) stacks instructions
+    |> Seq.map List.head
+    |> Seq.map (fun (Crate id) -> id)
+    |> Array.ofSeq
+    |> (fun x -> String.Concat(x))
